@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+
+.myenv
+.venv
+/ckpts/*
+/figs/
+/results/
+/logs/*
+/scripts/
+/seg/log/
+/seg/ckpts/
