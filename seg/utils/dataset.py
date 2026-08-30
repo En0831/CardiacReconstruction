@@ -87,7 +87,6 @@ class CAMUSDataset(Dataset):
                                 "patient_id": patient_id,
                                 "view": view,
                                 "phase": phase,
-                                "frame": None,
                                 "n_frames": None,
                             }
                         )
@@ -132,7 +131,6 @@ class CAMUSDataset(Dataset):
             "patient_id": patient_id,
             "view": view,
             "phase": "SEQ",
-            "frame": n_frames // 2,
             "n_frames": n_frames,
         }
 

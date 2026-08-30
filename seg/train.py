@@ -100,13 +100,13 @@ def validate(model, loader, criterion, device, num_classes=4):
             metrics[f"{metric}_{name}"] = value
             class_means.append(value)
 
-        metrics[f"{metric}_mean"] = float(np.mean(class_means))
+        metrics[f"{metric}_mean"] = float(np.nanmean(class_means))
 
     return metrics
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Train segmentation model on CAMUS ED/ES frames")
+    parser = argparse.ArgumentParser(description="Train segmentation model on CAMUS dataset")
 
     parser.add_argument("--data_root", type=str, required=True)
     parser.add_argument("--split_json", type=str, required=True)
@@ -220,7 +220,6 @@ def main():
     best_dice = -1.0
     best_epoch = -1
     best_metrics = None
-    best_record = None
 
     history = []
 
