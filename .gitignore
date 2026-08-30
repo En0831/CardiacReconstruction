@@ -3,10 +3,11 @@ __pycache__/
 
 .myenv
 .venv
-/ckpts/*
+/ckpts/
 /figs/
 /results/
-/logs/*
+/logs/
 /scripts/
 /seg/logs/
 /seg/ckpts/
+/jobs/

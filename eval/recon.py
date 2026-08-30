@@ -315,7 +315,7 @@ def build_argparser() -> argparse.ArgumentParser:
     ap.add_argument('--subset', default='test', choices=['train', 'valid', 'test'])
     ap.add_argument('--obs_sigma_rot', type=float, default=8.0)
     ap.add_argument('--obs_sigma_trans', type=float, default=4.0)
-    ap.add_argument('--camus_dir', default='../../data/camus/camus_pred/gt/')
+    ap.add_argument('--camus_dir', default='../../data/camus/camus_pred/')
     ap.add_argument('--ef_csv', default='')
     ap.add_argument('--fallback_mm', type=float, default=0.308)
     ap.add_argument('--grid_size', type=int, nargs=3, default=[96, 96, 128])
