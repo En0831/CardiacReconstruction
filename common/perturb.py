@@ -28,7 +28,16 @@ class AugmentSpec:
                          'trans_n_mm', 'trans_long_mm', 'trans_lat_mm']
         )
 
-def arm_specs(sigma_rot_deg: float = 15.0, sigma_trans_mm: float = 8.0) -> Dict[str, Tuple[AugmentSpec, AugmentSpec]]:
+def isotropic_spec(rot_deg: float, trans_mm: float) -> Optional[AugmentSpec]:
+    """Same sigma on all three rotations and all three translations"""
+    if rot_deg <= 0 and trans_mm <= 0:
+        return None
+    return AugmentSpec(sigma_longaxis_deg=rot_deg, sigma_tilt_deg=rot_deg,
+                       sigma_inplane_deg=rot_deg, sigma_trans_n_mm=trans_mm,
+                       sigma_trans_long_mm=trans_mm, sigma_trans_lat_mm=trans_mm)
+
+
+def arm_specs(sigma_rot_deg: float = 8.0, sigma_trans_mm: float = 4.0) -> Dict[str, Tuple[AugmentSpec, AugmentSpec]]:
     zero = AugmentSpec()
     six = AugmentSpec(
         sigma_longaxis_deg = sigma_rot_deg,

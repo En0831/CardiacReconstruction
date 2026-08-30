@@ -113,7 +113,7 @@ def main():
     parser.add_argument("--save_dir", type=str, default="./ckpts/camus_unet")
     parser.add_argument("--image_size", type=int, default=256)
     parser.add_argument("--num_classes", type=int, default=4)
-    parser.add_argument( "--model", type=str, default="unet", choices=["unet", "resunet", "attention_unet"])
+    parser.add_argument("--model", type=str, default="unet", choices=["unet", "resunet", "attention_unet"])
     parser.add_argument("--epochs", type=int, default=100)
     parser.add_argument("--batch_size", type=int, default=16)
     parser.add_argument("--lr", type=float, default=1e-4)

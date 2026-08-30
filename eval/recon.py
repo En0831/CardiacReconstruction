@@ -222,13 +222,11 @@ def whs_loop(fh, args, cfg, R, obs_spec) -> int:
                 rows, vols, ins = whs_rows(
                     R.kind, R.model, R.pose, bundle, seg, mode, R.anchor, spec,
                     args.n_samples, args.temperature, rng, cfg, R.device, ev)
+                common = {'dataset': 'whs', 'model': R.kind, 'arm': R.arm, 'case': cid, 'placement': mode, 
+                          'level_deg': lv, 'temperature': args.temperature}
                 for r in rows:
                     fh.write(json.dumps({
-                        'kind': 'sample', 'dataset': 'whs', 'model': R.kind,
-                        'arm': R.arm, 'case': cid, 'placement': mode,
-                        'level_deg': lv, 'level_mm': lv / 2,
-                        'temperature': args.temperature,
-                        'n_samples': len(rows),
+                        'kind': 'sample', **common, 'level_mm': lv / 2, 'n_samples': len(rows),
                         'seconds': round((time.time() - t0) / max(len(rows), 1), 3), **r}) + "\n")
                 if len(vols) > 1:
                     per = np.array([mean_dice(v, seg) for v in vols])

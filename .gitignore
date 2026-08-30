@@ -8,5 +8,5 @@ __pycache__/
 /results/
 /logs/*
 /scripts/
-/seg/log/
+/seg/logs/
 /seg/ckpts/
