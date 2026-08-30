@@ -394,7 +394,7 @@ def main():
     print(json.dumps({k: v for k, v in meta.items() if k != 'args'}, indent=2))
 
     os.makedirs(os.path.dirname(args.out) or '.', exist_ok=True)
-    fh = open(args.out, 'w')
+    fh = open(args.out, 'w', buffering=1)
     fh.write(json.dumps(meta) + "\n")
 
     R = SimpleNamespace(kind=kind, model=model, pose=pose, arm=arm, anchor=anchor,
