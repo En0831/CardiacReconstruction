@@ -54,7 +54,7 @@ def load_implicit(path: str, device, args):
 
 def implicit_reconstruct(m, views, frames, cfg: ViewConfig, device, rng: np.random.Generator) -> np.ndarray:
     res = F.fit_latent(m.net, views, frames, m.latents, m.cfg, cfg.mm_per_voxel, device, lat_reg_lambda=m.reg, 
-                       use_pose=m.use_pose, fit_a4c=True, chirality=True, rng=rng)
+                       use_pose=m.use_pose, fit_a4c=True, chirality=False, rng=rng)
     return decode_volume(m.net, res['z'], cfg.grid_size, cfg.mm_per_voxel, device)
 
 

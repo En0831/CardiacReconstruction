@@ -130,7 +130,7 @@ def main():
     ap.add_argument('--n_epoch', type=int, default=200)
     ap.add_argument('--val_every', type=int, default=5)
     ap.add_argument('--ckpt_every', type=int, default=25)
-    ap.add_argument('--num_workers', type=int, default=4)
+    ap.add_argument('--num_workers', type=int, default=2)
     ap.add_argument('--tag', default='pose')
     ap.add_argument('--ckpt_dir', default='./ckpts/pose')
     ap.add_argument('--device', default='cuda')
