@@ -56,7 +56,7 @@ def main():
     ap.add_argument('--grid_size', type=int, nargs=3, default=[96, 96, 128])
     ap.add_argument('--voxel_size', type=float, default=2.0)
     ap.add_argument('--resume', default='', type=str)
-    ap.add_argument('--num_workers', type=int, default=4)
+    ap.add_argument('--num_workers', type=int, default=2)
     args = ap.parse_args()
     if args.arm in ('C', 'A2c') and args.canonical_a2c_angle is None:
         ap.error("--canonical_a2c_angle is required for arm C and A2c")
