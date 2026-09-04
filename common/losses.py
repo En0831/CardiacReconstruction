@@ -47,30 +47,3 @@ class CEWithDiceLoss(torch.nn.Module):
         dice = soft_dice_multiclass(logits, target, self.num_classes,
                                     self.include_background_in_dice)
         return self.ce_weight * ce + (1.0 - dice)
-
-
-def masked_ce_dice(logits: torch.Tensor, labels: torch.Tensor, fg_mask: torch.Tensor, observed_classes: Sequence[int],
-                   ce_weight: float = 1.0, eps: float = 1e-6, dice_eps: float = 1e-3) -> torch.Tensor:
-    """CE + (1 - Dice) on the observed foreground only."""
-    if not bool(fg_mask.any()):
-        return logits.new_zeros(())
-
-    probs = torch.softmax(logits, dim=1)        # [B, C, *ST]
-    probs_pix = probs.movedim(1, -1)[fg_mask]   # [N, C]
-    target = labels[fg_mask]                    # [N]
-
-    # ---- CE over the observed foreground pixels ----
-    ce = -torch.log(probs_pix.gather(1, target[:, None]).squeeze(1) + eps).mean()
- 
-    # ---- Dice over the observed classes, on those same pixels ----
-    obs = sorted(int(c) for c in observed_classes)
-    dices = []
-    for c in obs:
-        p_c = probs_pix[:, c]               # [N]
-        g_c = (target == c).to(p_c.dtype)   # [N]
-        inter = (p_c * g_c).sum()
-        denom = p_c.sum() + g_c.sum()
-        dices.append((2.0 * inter + dice_eps) / (denom + dice_eps))
-    dice = torch.stack(dices).mean() if dices else probs.new_ones(())
- 
-    return ce_weight * ce + (1.0 - dice)
