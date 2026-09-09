@@ -1,4 +1,4 @@
-# train.py
+# seg/train.py
 
 """Train segmentation model on CAMUS dataset"""
 
