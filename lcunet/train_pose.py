@@ -77,36 +77,24 @@ def print_report(rep: dict, epoch: int, n_epoch: int, train_nll: float) -> None:
         print(f"[{epoch}/{n_epoch}] train NLL {train_nll:.4f} | no valid samples",
               flush=True)
         return
-    print(f"\n[{epoch}/{n_epoch}] train NLL {train_nll:.4f}   "
+    print(f"  \n[{epoch}/{n_epoch}] train NLL {train_nll:.4f}   "
           f"valid NLL {rep['nll']:.4f}   n {rep['n']}")
     print(f"  {'dof':<24}{'sigma':>9}{'prior':>9}{'ratio':>8}"
-          f"{'r.std':>8}{'c68':>7}{'c95':>7}{'kurt':>8}  flags")
+          f"{'r.std':>8}{'c68':>7}{'c95':>7}{'kurt':>8}")
     for i, name in enumerate(Z_SUP_NAMES):
         d = rep['per_dim'][name]
         sig, pri = rep['sigma_mean'][i], rep['prior_sd'][i]
-        flags = []
-        if d['flag_overconfident']:
-            flags.append('OVERCONF')
-        if d['flag_underconfident']:
-            flags.append('underconf')
-        if d['flag_bimodal']:
-            flags.append('BIMODAL')
-        if pri > 0 and sig / pri > 0.95:
-            flags.append('=prior')
-        print(f"  {name:<24}{sig:>9.3f}{pri:>9.3f}{sig/max(pri,1e-9):>8.2f}"
+        print(f"{name:<24}{sig:>9.3f}{pri:>9.3f}{sig/max(pri,1e-9):>8.2f}"
               f"{d['std']:>8.2f}{d['cover68']:>7.2f}{d['cover95']:>7.2f}"
-              f"{d['excess_kurtosis']:>8.2f}  {' '.join(flags)}")
+              f"{d['excess_kurtosis']:>8.2f}")
     if rep['pairs']:
         print("  residual correlations above 0.3 (a diagonal head cannot fit these):")
         for a, b_, v in rep['pairs']:
             print(f"    {a:<24} {b_:<24} {v:+.2f}")
-    print("  ratio ~1 means the observation carried no information for that DoF."
-          "\n  At sigma 8/4 the translations are 93-99% injected noise, so that is"
-          "\n  the correct answer there, not a failure.", flush=True)
-
+    
 
 def main():
-    ap = argparse.ArgumentParser(description="train the residual posterior (部品2)")
+    ap = argparse.ArgumentParser(description="train the residual posterior")
     add_split_args(ap)
     ap.add_argument('--canonical_a2c_angle', type=float, required=True)
     ap.add_argument('--canonical_apex', type=float, nargs=3, default=None)
@@ -124,13 +112,7 @@ def main():
     ap.add_argument('--dims', type=int, nargs='+', default=[32, 64, 128, 256])
     ap.add_argument('--hidden', type=int, default=256)
     ap.add_argument('--min_sigma', type=float, default=0.05)
-    ap.add_argument('--batch_size', type=int, default=16)
-    ap.add_argument('--lr', type=float, default=3e-4)
-    ap.add_argument('--weight_decay', type=float, default=1e-4)
     ap.add_argument('--n_epoch', type=int, default=200)
-    ap.add_argument('--val_every', type=int, default=5)
-    ap.add_argument('--ckpt_every', type=int, default=25)
-    ap.add_argument('--num_workers', type=int, default=2)
     ap.add_argument('--tag', default='pose')
     ap.add_argument('--ckpt_dir', default='./ckpts/pose')
     ap.add_argument('--device', default='cuda')
@@ -157,11 +139,8 @@ def main():
                   patch_mm_per_px=args.patch_mm_per_px)
     trainset = build_pose_dataset(split, 'train', **common)
     validset = build_pose_dataset(split, 'valid', **common)
-    tl = DataLoader(trainset, batch_size=args.batch_size, shuffle=True,
-                    drop_last=True, num_workers=args.num_workers,
-                    collate_fn=collate_skip)
-    vl = DataLoader(validset, batch_size=args.batch_size, shuffle=False,
-                    num_workers=args.num_workers, collate_fn=collate_skip)
+    tl = DataLoader(trainset, batch_size=16, shuffle=True, drop_last=True, num_workers=2, collate_fn=collate_skip)
+    vl = DataLoader(validset, batch_size=16, shuffle=False, num_workers=2, collate_fn=collate_skip)
     cfg = trainset.base.cfg
     print(f"anchor {args.anchor} | apex {tuple(cfg.canonical_apex)} | a2c "
           f"{cfg.canonical_a2c_angle_deg} | sigma {args.sigma_rot_deg}/"
@@ -180,7 +159,7 @@ def main():
     for i, name in enumerate(Z_SUP_NAMES):
         print(f"    {name:<24} mean {Z0[:, i].mean():8.3f}  sd {Z0[:, i].std(ddof=1):8.3f}")
 
-    opt = torch.optim.AdamW(net.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+    opt = torch.optim.AdamW(net.parameters(), lr=3e-4, weight_decay=1e-4)
     sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=args.n_epoch)
 
     history = []
@@ -207,12 +186,14 @@ def main():
         sched.step()
         train_nll = float(np.mean(losses)) if losses else float('nan')
 
-        if epoch % args.val_every == 0:
+        # evaluate every 5 epochs
+        if epoch % 5 == 0:
             rep = evaluate(net, vl, device)
             print_report(rep, epoch, args.n_epoch, train_nll)
             history.append({'epoch': epoch, 'train_nll': train_nll, **rep})
 
-        if epoch % args.ckpt_every == 0:
+        # save checkpoint every 25 epochs
+        if epoch % 25 == 0:
             torch.save({'net': net.state_dict(), 'optimizer': opt.state_dict(),
                         'epoch': epoch, 'cov': args.cov, 'n_landmarks': n_lm,
                         'dims': list(args.dims), 'hidden': args.hidden,

@@ -180,8 +180,7 @@ class PoseNet(nn.Module):
         return var.sqrt() * self.z_sd
 
 
-def build_pose_net(cov: str = 'full', n_landmarks: int = 0,
-                   dims: Sequence[int] = (32, 64, 128, 256),
+def build_pose_net(cov: str = 'full', n_landmarks: int = 0, dims: Sequence[int] = (32, 64, 128, 256), 
                    hidden: int = 256, min_sigma: float = 0.05) -> PoseNet:
     return PoseNet(dims=dims, n_landmarks=n_landmarks, cov=cov,
                    hidden=hidden, min_sigma=min_sigma)

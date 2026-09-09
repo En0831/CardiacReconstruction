@@ -47,16 +47,10 @@ def main():
     ap.add_argument('--ckpt_dir', default='./ckpts/')
     ap.add_argument('--device', default='cuda')
     ap.add_argument('--dim_hid', type=int, nargs='+', default=[32, 64, 128, 256, 256])
-    ap.add_argument('--drop_rate', type=float, default=0.0)
-    ap.add_argument('--batch_size', type=int, default=1)
-    ap.add_argument('--lr', type=float, default=1e-4)
     ap.add_argument('--n_epoch', type=int, default=500)
-    ap.add_argument('--val_every', type=int, default=10)
-    ap.add_argument('--ckpt_every', type=int, default=50)
     ap.add_argument('--grid_size', type=int, nargs=3, default=[96, 96, 128])
     ap.add_argument('--voxel_size', type=float, default=2.0)
     ap.add_argument('--resume', default='', type=str)
-    ap.add_argument('--num_workers', type=int, default=2)
     args = ap.parse_args()
     if args.arm in ('C', 'A2c') and args.canonical_a2c_angle is None:
         ap.error("--canonical_a2c_angle is required for arm C and A2c")
@@ -77,11 +71,11 @@ def main():
                   canonical_apex=args.canonical_apex)
     trainset = build_lcunet_dataset(split, 'train', arm=args.arm, **common)
     validset = build_lcunet_dataset(split, 'valid', arm=args.arm, **common)
-    loader = DataLoader(trainset, batch_size=args.batch_size, shuffle=True, drop_last=True, num_workers=args.num_workers)
+    loader = DataLoader(trainset, batch_size=1, shuffle=True, drop_last=True, num_workers=2)
     print(f"arm {args.arm}: {len(trainset)} train / {len(validset)} valid volumes", flush=True)
 
-    net = UNet(dim_in=N_CLASSES, dim_hid=args.dim_hid, dim_out=N_CLASSES, drop_rate=args.drop_rate).to(device)
-    optimizer = torch.optim.Adam(net.parameters(), lr=args.lr)
+    net = UNet(dim_in=N_CLASSES, dim_hid=args.dim_hid, dim_out=N_CLASSES).to(device)
+    optimizer = torch.optim.Adam(net.parameters(), lr=1e-4)
     criterion = CEWithDiceLoss(num_classes=N_CLASSES).to(device)
 
     start_epoch = 0
@@ -109,7 +103,7 @@ def main():
             optimizer.step()
             running.append(loss.item())
 
-        if epoch % args.val_every == 0:
+        if epoch % 10 == 0:
             ev, excluded = validate(net, validset, device, spacing)
             s = ev.summary(verbose=False)
             msg = (f"[{epoch}/{args.n_epoch}] loss {np.mean(running):.4f} | "
@@ -119,7 +113,7 @@ def main():
                 msg += f" | {len(excluded)} val cases empty at {args.arm}"
             print(msg, flush=True)
 
-        if epoch % args.ckpt_every == 0:
+        if epoch % 50 == 0:
             torch.save({'net': net.state_dict(),
                         'optimizer': optimizer.state_dict(),
                         'epoch': epoch,
