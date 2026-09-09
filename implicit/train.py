@@ -11,7 +11,7 @@ import torch
  
 from common.losses import CEWithDiceLoss
 from common.splits import split_from_args, add_split_args
-from common.views import ViewConfig
+from common.views import N_CLASSES, ViewConfig
 from implicit.data import build_prior_trainset
 from implicit.implicits_echo import MultiClassAutoDecoder
 from implicit.decode import decode_dice
@@ -28,28 +28,22 @@ def evaluate_dense(net, latent, dataset, item, device, chunk=64 ** 3):
 def main():
     ap = argparse.ArgumentParser(description="6-class implicit auto-decoder shape prior")
     add_split_args(ap) 
-    ap.add_argument('--tag', default='echo6')
+    ap.add_argument('--tag', default='implicit')
     ap.add_argument('--ckpt_dir', default='./ckpts/')
     ap.add_argument('--device', default='cuda')
-    ap.add_argument('--num_classes', type=int, default=6)
     ap.add_argument('--latent_dim', type=int, default=128)
     ap.add_argument('--op_num_layers', type=int, default=8)
     ap.add_argument('--op_coord_layers', type=int, nargs='+', default=[0, 4])
-    ap.add_argument('--num_points', type=int, default=32 ** 3)
-    ap.add_argument('--fg_fraction', type=float, default=0.5)
-    ap.add_argument('--batch_size', type=int, default=4)
-    ap.add_argument('--lr', type=float, default=1e-4)
-    ap.add_argument('--lr_lat', type=float, default=1e-3)
     ap.add_argument('--lat_reg_lambda', type=float, default=1e-4)
     ap.add_argument('--n_epoch', type=int, default=4000)
-    ap.add_argument('--log_every', type=int, default=20)
-    ap.add_argument('--ckpt_every', type=int, default=200)
     ap.add_argument('--voxel_size', type=float, default=2.0)
     ap.add_argument('--grid_size', type=int, nargs=3, default=[96, 96, 128])
     ap.add_argument('--resume', default='', type=str)
     ap.add_argument('--canonical', action='store_true')
     ap.add_argument('--canonical_a2c_angle', type=float, default=-76.6)
     ap.add_argument('--canonical_apex', type=float, nargs=3, default=[35.0, 44.0, 18.0])
+    ap.add_argument('--canonical_anchor', type=str, default='anatomical', choices=['anatomical', 'a4c'])
+    ap.add_argument('--view_config', default = 'left')
     args = ap.parse_args()
  
     os.makedirs(args.ckpt_dir, exist_ok=True)
@@ -64,14 +58,14 @@ def main():
             grid_size=tuple(args.grid_size),
             mm_per_voxel=args.voxel_size,
             canonical_a2c_angle_deg=args.canonical_a2c_angle,
-            canonical_apex=tuple(args.canonical_apex)
+            canonical_apex=tuple(args.canonical_apex),
+            view_config=args.view_config
         )
     trainset = build_prior_trainset(
-        split, num_points=args.num_points, num_classes=args.num_classes,
-        grid_size=args.grid_size, voxel_size=args.voxel_size,
-        fg_fraction=args.fg_fraction, canonical_cfg=canonical_cfg)
+        split, grid_size=args.grid_size, voxel_size=args.voxel_size,
+        canonical_cfg=canonical_cfg, canonical_anchor=args.canonical_anchor)
     loader = torch.utils.data.DataLoader(
-        trainset, batch_size=args.batch_size, shuffle=True, drop_last=True)
+        trainset, batch_size=4, shuffle=True, drop_last=True)
     print(f"{len(trainset)} training volumes, image_size={trainset.image_size.tolist()} mm",
           flush=True)
  
@@ -80,18 +74,17 @@ def main():
         lat_dim=args.latent_dim, spatial_dim=3,
         image_size=trainset.image_size.clone(),
         occnet_num_layers=args.op_num_layers,
-        occnet_layers_with_coords=args.op_coord_layers,
-        num_classes=args.num_classes).to(device)
+        occnet_layers_with_coords=args.op_coord_layers).to(device)
  
     latents = torch.nn.Parameter(
         torch.normal(0.0, 1.0 / math.sqrt(args.latent_dim),
                      [len(trainset), args.latent_dim], device=device))
  
     optimizer = torch.optim.Adam([
-        {'params': net.parameters(), 'lr': args.lr},
-        {'params': latents, 'lr': args.lr_lat},
+        {'params': net.parameters(), 'lr': 1e-4},
+        {'params': latents, 'lr': 1e-3},
     ])
-    criterion = CEWithDiceLoss(num_classes=args.num_classes).to(device)
+    criterion = CEWithDiceLoss().to(device)
  
     # ---- optional resume ----
     start_epoch = 0
@@ -131,25 +124,26 @@ def main():
             optimizer.step()
             running.append(loss.item())
  
-        if epoch % args.log_every == 0:
+        if epoch % 20 == 0:
             d = evaluate_dense(net, latents[0].detach(), trainset, 0, device)
-            names = ['LV', 'MY', 'RV', 'LA', 'RA'][:args.num_classes - 1]
+            names = ['LV', 'MY', 'RV', 'LA', 'RA'][:N_CLASSES - 1]
             msg = "  ".join(f"{n}:{v:.3f}" for n, v in zip(names, d))
             print(f"[{epoch}/{args.n_epoch}] loss {np.mean(running):.4f} | case0 {msg}",
                   flush=True)
  
-        if epoch % args.ckpt_every == 0:
+        if epoch % 200 == 0:
             torch.save({'net': net.state_dict(),
                         'latents_train': latents.detach().cpu(),
                         'gauge_space': 'canonical' if args.canonical else 'original',
-                        'gauge_anchor': 'anatomical' if args.canonical else None,
+                        'gauge_anchor': args.canonical_anchor if args.canonical else None,
                         'canonical_apex': list(args.canonical_apex) if args.canonical else None,
                         'canonical_a2c_angle_deg': args.canonical_a2c_angle if args.canonical else None,
+                        'view_config': args.view_config if args.canonical else None,
                         'optimizer': optimizer.state_dict(),
                         'epoch': epoch,
                         'image_size': trainset.image_size,
                         'split_fingerprint': split.fingerprint,
-                        'args': vars(args)},
+                        'args': {**vars(args), 'num_classes': N_CLASSES}},
                        os.path.join(args.ckpt_dir, f'ad_mc_{args.tag}_{epoch}.pth'))
  
  

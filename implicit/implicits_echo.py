@@ -4,7 +4,6 @@ from typing import List, Optional, Sequence
 import torch
 import torch.nn.functional as F
 
-from common.losses import masked_ce_dice
 
 # ==============================
 # Model
@@ -82,6 +81,32 @@ class MultiClassAutoDecoder(torch.nn.Module):
 # ==============================
 # Losses
 # ==============================
+def _masked_ce_dice(logits: torch.Tensor, labels: torch.Tensor, fg_mask: torch.Tensor, observed_classes: Sequence[int],
+                   ce_weight: float = 1.0, eps: float = 1e-6, dice_eps: float = 1e-3) -> torch.Tensor:
+    """CE + (1 - Dice) on the observed foreground only."""
+    if not bool(fg_mask.any()):
+        return logits.new_zeros(())
+
+    probs = torch.softmax(logits, dim=1)        # [B, C, *ST]
+    probs_pix = probs.movedim(1, -1)[fg_mask]   # [N, C]
+    target = labels[fg_mask]                    # [N]
+
+    # ---- CE over the observed foreground pixels ----
+    ce = -torch.log(probs_pix.gather(1, target[:, None]).squeeze(1) + eps).mean()
+ 
+    # ---- Dice over the observed classes, on those same pixels ----
+    obs = sorted(int(c) for c in observed_classes)
+    dices = []
+    for c in obs:
+        p_c = probs_pix[:, c]               # [N]
+        g_c = (target == c).to(p_c.dtype)   # [N]
+        inter = (p_c * g_c).sum()
+        denom = p_c.sum() + g_c.sum()
+        dices.append((2.0 * inter + dice_eps) / (denom + dice_eps))
+    dice = torch.stack(dices).mean() if dices else probs.new_ones(())
+ 
+    return ce_weight * ce + (1.0 - dice)
+
 
 class PartialLabelLoss(torch.nn.Module):
     def __init__(self, observed_map: dict, num_classes: int = 6, eps: float = 1e-6,
@@ -118,7 +143,7 @@ class PartialLabelLoss(torch.nn.Module):
         loss = logits.new_zeros(())
 
         # positive term: standard CE where the class is actually known
-        loss = loss + masked_ce_dice(logits, model_labels, fg, self.observed_model_classes,
+        loss = loss + _masked_ce_dice(logits, model_labels, fg, self.observed_model_classes,
                                      ce_weight=self.ce_weight, eps=self.eps)
 
         # negative term: "none of the observed structures live here"

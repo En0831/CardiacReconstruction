@@ -11,7 +11,8 @@ import torch.nn.functional as F
 from torch.utils.data import Dataset
  
 import nibabel as nib
- 
+
+from common.views import build_geometry, cut_planes, to_2d, original_frames
 from common.splits import Split
 from common import canonical as C
 
@@ -41,9 +42,19 @@ def full_grid_coords(grid_size: Sequence[int], spacing: torch.Tensor) -> torch.T
 # ==============================
 # Training dense prior
 # ==============================
+def canonical_gauge(seg, cfg, anchor='anatomical', case_id=''):
+    if anchor == 'anatomical':
+        return C.build_gauge(seg, cfg)
+    if anchor != 'a4c':
+        raise ValueError(f"unknown canonical anchor {anchor!r}")
+    geo = build_geometry(seg, cfg)
+    views = to_2d(cut_planes(seg, geo, cfg), cfg, case_id=case_id)
+    f4 = original_frames(views, geo)['a4c']
+    return C.build_gauge(seg, cfg, anchor='a4c', frame_a4c=f4)
+
 class DenseVolumeDataset(Dataset):
     def __init__(self, files: Sequence[str], num_points: int = 64 ** 3, num_classes: int = 6, grid_size: Sequence[int] = (96, 96, 128),
-                 voxel_size: float = 2.0, fg_fraction: float = 0.5, device: str = 'cpu', canonical_cfg=None):
+                 voxel_size: float = 2.0, fg_fraction: float = 0.5, device: str = 'cpu', canonical_cfg=None, canonical_anchor='anatomical'):
         super().__init__()
         self.files = list(files)
         self.num_points = num_points
@@ -60,7 +71,7 @@ class DenseVolumeDataset(Dataset):
             seg = nib.load(path).get_fdata().astype(np.uint8)
             seg = resample_labels(seg, self.grid_size, num_classes, device)
             if canonical_cfg is not None:
-                gauge = C.build_gauge(seg, canonical_cfg)
+                gauge = canonical_gauge(seg, canonical_cfg, anchor=canonical_anchor, case_id=os.path.basename(path))
                 seg = C.resample_to_canonical(seg, gauge, canonical_cfg)
             self.volumes.append(torch.from_numpy(seg).long())
             self.casenames.append(os.path.basename(path))
@@ -96,7 +107,8 @@ class DenseVolumeDataset(Dataset):
 
 
 def build_prior_trainset(split: Split, num_points: int = 32 ** 3, num_classes: int = 6, grid_size: Sequence[int] = (96, 96, 128), voxel_size: float = 2.0,
-                         fg_fraction: float = 0.5, device: str = 'cpu', canonical_cfg=None) -> DenseVolumeDataset:
+                         fg_fraction: float = 0.5, device: str = 'cpu', canonical_cfg=None, canonical_anchor: str = 'anatomical') -> DenseVolumeDataset:
     """Build a dataset for training the implicit prior."""
     return DenseVolumeDataset(split.paths('train'), num_points=num_points, num_classes=num_classes, grid_size=grid_size, 
-                              voxel_size=voxel_size, fg_fraction=fg_fraction, device=device, canonical_cfg=canonical_cfg)
+                              voxel_size=voxel_size, fg_fraction=fg_fraction, device=device, canonical_cfg=canonical_cfg,
+                              canonical_anchor=canonical_anchor)

@@ -211,7 +211,7 @@ def _snapshot_pose(poses: Dict[str, ViewPose]) -> Dict[str, dict]:
 
 def fit_latent(net, views: Dict[str, View2D], frames: Dict[str, PlaneParams], latents_train: torch.Tensor, config: FitConfig, mm_per_voxel: float,
                device, lat_reg_lambda: Optional[float] = None, n_points: int = 40000, d0_mm: float = 20.0, n_restart: int = 2, use_pose: bool = True, 
-               fit_a4c: bool = False, chirality: bool = True, rng: Optional[np.random.Generator] = None) -> dict:
+               fit_a4c: bool = False, chirality: bool = False, rng: Optional[np.random.Generator] = None) -> dict:
     """Fit latent code and optionally pose to 2D views."""
     rng = rng or np.random.default_rng()
     tensors = views_to_tensors(views, frames, device, n_points, d0_mm, rng)

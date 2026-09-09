@@ -54,7 +54,7 @@ def load_implicit(path: str, device, args):
 
 def implicit_reconstruct(m, views, frames, cfg: ViewConfig, device, rng: np.random.Generator) -> np.ndarray:
     res = F.fit_latent(m.net, views, frames, m.latents, m.cfg, cfg.mm_per_voxel, device, lat_reg_lambda=m.reg, 
-                       use_pose=m.use_pose, fit_a4c=True, chirality=False, rng=rng)
+                       use_pose=m.use_pose, fit_a4c=False, chirality=False, rng=rng)
     return decode_volume(m.net, res['z'], cfg.grid_size, cfg.mm_per_voxel, device)
 
 
@@ -198,7 +198,7 @@ def check_args(args, pose, a2c: Optional[float]) -> None:
 def whs_loop(fh, args, cfg, R, obs_spec) -> int:
     """Rows for the WHS synthetic path. Returns how many cases were saved as NIfTI."""
     n_written = 0
-    paths = R.split.paths(args.subset)
+    paths = R.split.paths('test')
     if args.limit:
         paths = paths[:args.limit]
 
@@ -259,8 +259,8 @@ def camus_loop(fh, args, cfg, R) -> int:
 
     for i, pid in enumerate(pats):
         try:
-            cases = {ph: load_case(args.camus_dir, pid, ph, cfg.mm_per_voxel,
-                                   args.fallback_mm, args.camus_suffix) for ph in ('ED', 'ES')}
+            cases = {ph: load_case(root=args.camus_dir, pid=pid, phase=ph, mm_per_voxel=cfg.mm_per_voxel,
+                                   suffix=args.camus_suffix) for ph in ('ED', 'ES')}
         except Exception as e:
             fh.write(json.dumps({'kind': 'skip', 'case': pid, 'error': f"{type(e).__name__}: {e}"}) + "\n")
             continue
@@ -312,16 +312,13 @@ def build_argparser() -> argparse.ArgumentParser:
     ap.add_argument('--levels', type=float, nargs='+', default=[0.0])
     ap.add_argument('--n_samples', type=int, default=1)
     ap.add_argument('--temperature', type=float, default=1.0)
-    ap.add_argument('--subset', default='test', choices=['train', 'valid', 'test'])
     ap.add_argument('--obs_sigma_rot', type=float, default=8.0)
     ap.add_argument('--obs_sigma_trans', type=float, default=4.0)
     ap.add_argument('--camus_dir', default='../../data/camus/camus_pred/')
     ap.add_argument('--ef_csv', default='')
-    ap.add_argument('--fallback_mm', type=float, default=0.308)
     ap.add_argument('--grid_size', type=int, nargs=3, default=[96, 96, 128])
     ap.add_argument('--voxel_size', type=float, default=2.0)
     ap.add_argument('--view_config', default='left')
-    ap.add_argument('--anchor', default='')
     ap.add_argument('--canonical_a2c_angle', type=float, default=None)
     ap.add_argument('--canonical_apex', type=float, nargs=3, default=None)
     ap.add_argument('--n_iter_latent', type=int, default=100)
@@ -329,7 +326,6 @@ def build_argparser() -> argparse.ArgumentParser:
     ap.add_argument('--fit_lr', type=float, default=1e-2)
     ap.add_argument('--pose_off', action='store_true')
     ap.add_argument('--save_nifti', default='')
-    ap.add_argument('--save_nifti_n', type=int, default=3)
     ap.add_argument('--limit', type=int, default=0)
     ap.add_argument('--seed', type=int, default=0)
     ap.add_argument('--device', default='cuda')
@@ -362,11 +358,10 @@ def main():
         model = load_implicit(path, device, args)
         arm = 'pose_off' if args.pose_off else 'pose_on'
         train_sigma = [None, None]
-        gauge = {'anchor': None, 'canonical_a2c_angle_deg': None, 'canonical_apex': None}
-        if pose is None and any(p in CANONICAL for p in args.placement):
-            gauge.update(anchor=args.anchor or 'a4c')
+        a = model.args
+        gauge = {'anchor': a.get('gauge_anchor'), 'canonical_a2c_angle_deg': a.get('canonical_a2c_angle_deg'), 'canonical_apex': a.get('canonical_apex')}
 
-    anchor = args.anchor or gauge.get('anchor') or 'a4c'
+    anchor = gauge.get('anchor') or 'a4c'
     a2c = (args.canonical_a2c_angle if args.canonical_a2c_angle is not None
            else gauge.get('canonical_a2c_angle_deg'))
     apex = args.canonical_apex or gauge.get('canonical_apex')
@@ -399,7 +394,7 @@ def main():
 
     R = SimpleNamespace(kind=kind, model=model, pose=pose, arm=arm, anchor=anchor,
                         split=split, device=device,
-                        keep_n=(args.save_nifti_n if args.save_nifti else 0))
+                        keep_n=(3 if args.save_nifti else 0))
 
     if args.dataset == 'whs':
         obs_spec = isotropic_spec(args.obs_sigma_rot, args.obs_sigma_trans)
