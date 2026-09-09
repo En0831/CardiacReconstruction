@@ -1,4 +1,6 @@
 # implicit/implicits_echo.py
+# This source code is based on https://github.com/menzelab/implicit-shape-reconstruction 
+# and reproduces the method described in https://doi.org/10.1117/12.3086262.
 
 from typing import List, Optional, Sequence
 import torch

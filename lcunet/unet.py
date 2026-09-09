@@ -1,4 +1,6 @@
 # lcunet/unet.py
+# This architecture follows the one used in previous work (https://github.com/m-qiang/HeartSSM)
+
 
 import torch
 import torch.nn as nn
